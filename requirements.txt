@@ -1,0 +1,8 @@
+torch
+transformers
+ffmpeg
+pydub
+openai-whisper
+xtts
+coqui-tts
+notion-client

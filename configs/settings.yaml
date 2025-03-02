@@ -1,0 +1,3 @@
+model: whisper
+summarization: bart
+text_to_speech: xtts
