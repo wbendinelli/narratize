@@ -161,11 +161,4 @@ This project is licensed under the **MIT License**.
 
 ---
 
-## **📩 Contact**
-For questions or support, reach out via:  
-📧 Email: [your_email@example.com](mailto:your_email@example.com)  
-📲 Twitter: [@yourhandle](https://twitter.com/yourhandle)  
-
----
-
 **🚀 Ready to transform your audio into books & podcasts? Let's get started with Narratize!**
