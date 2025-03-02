@@ -15,14 +15,14 @@ Narratize is built using a hybrid AI approach, integrating:
 - **Multi-Format Export**: Markdown, Notion API, and structured text for various downstream applications.
 
 ### **2.1 Workflow Architecture**
-```mermaid
-graph TD;
-    A[Audio/Video Input] -->|Whisper| B[Raw Transcription]
-    B -->|Summarization (BART/T5/Pegasus)| C[Structured Summary]
-    C -->|LLM Expansion (GPT-4)| D[Book Chapter]
-    C -->|Formatted Dialogue| E[Podcast Script]
-    D -->|Markdown/Notion Export| F[Book Draft]
-    E -->|Audio Generation| G[Podcast]
+```plaintext
+1. Audio/Video Input
+2. Whisper ASR -> Raw Transcription
+3. Summarization (BART/T5/Pegasus) -> Structured Summary
+4. LLM Expansion (GPT-4) -> Book Chapter
+5. Formatting Dialogue -> Podcast Script
+6. Markdown/Notion Export -> Book Draft
+7. Audio Generation -> Podcast Output
 ```
 
 ### **2.2 Core Modules**
@@ -153,3 +153,4 @@ For academic use, please cite:
 ---
 
 **🚀 Narratize: A Research-Grade AI Framework for Structured Audio-to-Text Processing**
+
