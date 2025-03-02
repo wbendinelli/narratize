@@ -1,40 +1,20 @@
-# 📚 Narratize: Transform Audio into Books & Podcasts
+# 📚 Narratize: AI-Driven Audio-to-Text Structuring Framework
 
-Narratize is an **AI-powered pipeline** that **transcribes**, **summarizes**, and **structures** audio content into **books or podcasts**.
+## **1. Introduction**
+Narratize is a modular, AI-powered pipeline designed to process and structure audio content into textual formats optimized for research, publication, and podcasting. The framework leverages state-of-the-art natural language processing (NLP) techniques to perform high-fidelity **transcription, summarization, and structuring**, enabling automated generation of structured documents, book chapters, and podcast-ready scripts.
 
----
-
-## **🚀 Features**
-✅ **Automatic Transcription** using Whisper  
-✅ **Summarization with BART, T5, and Pegasus**  
-✅ **Notion Integration** for structured storage  
-✅ **Export to Markdown, Notion, and PDF**  
-✅ **Support for Podcast Script Generation**  
+This project is particularly useful in scenarios where **long-form content needs to be efficiently transformed into structured, coherent, and domain-specific narratives**.
 
 ---
 
-## **📚 Project Structure**
-```
-narratize/
-│── data/
-│   ├── input/             # Raw audio/video files
-│   ├── transcriptions/    # Whisper transcriptions
-│   ├── structured_text/   # Summarized and structured content
-│   ├── notion_sync/       # Notion-ready exports
-│   ├── book_output/       # Final book-ready chapters
-│   ├── podcast_output/    # Final podcast-ready scripts
-│── src/                   # Core processing scripts
-│── utils/                 # Helper scripts
-│── configs/               # Configuration settings
-│── notebooks/             # Jupyter Notebooks for testing
-│── tests/                 # Unit tests
-│── docs/                  # Documentation
-│── README.md              # Project documentation
-```
+## **2. Technical Overview**
+Narratize is built using a hybrid AI approach, integrating:
+- **Speech-to-Text (ASR)**: OpenAI’s Whisper model for high-accuracy, multi-language transcription.
+- **Text Summarization**: Transformer-based models such as BART, T5, and Pegasus for abstractive and extractive summarization.
+- **Structured Text Generation**: Large Language Models (LLMs) such as GPT-4 for chapter-style content development.
+- **Multi-Format Export**: Markdown, Notion API, and structured text for various downstream applications.
 
----
-
-## **🔄 Workflow**
+### **2.1 Workflow Architecture**
 ```mermaid
 graph TD;
     A[Audio/Video Input] -->|Whisper| B[Raw Transcription]
@@ -45,19 +25,22 @@ graph TD;
     E -->|Audio Generation| G[Podcast]
 ```
 
-1️⃣ **Transcribe Audio (Whisper)**  
-2️⃣ **Summarize & Structure Text (BART, T5, Pegasus)**  
-3️⃣ **Export to Notion / Markdown**  
-4️⃣ **Format for Book or Podcast Production**  
+### **2.2 Core Modules**
+- **`transcriber.py`**: ASR module for speech-to-text conversion.
+- **`structurer.py`**: Text post-processing, summarization, and structuring.
+- **`chapter_creator.py`**: Advanced structuring using LLMs for book-style narratives.
+- **`exporter.py`**: Integration with external systems (Markdown, Notion, Google Docs).
 
 ---
 
-## **🛠️ Installation**
+## **3. Installation & Setup**
+
+### **3.1 Requirements**
 ```bash
 pip install -r requirements.txt
 ```
 
-If running on Google Colab:
+If running on **Google Colab**, mount the Google Drive for persistent storage:
 ```python
 from google.colab import drive
 drive.mount('/content/drive')
@@ -69,8 +52,9 @@ cd /content/drive/MyDrive/narratize/
 
 ---
 
-## **🚀 How to Run**
-### **1️⃣ Transcribe Audio (Whisper)**
+## **4. Usage Instructions**
+
+### **4.1 Transcribe Audio (Whisper ASR)**
 ```python
 from src.transcriber import Transcriber
 
@@ -78,7 +62,7 @@ transcriber = Transcriber(model_size="medium", language="en", verbose=True)
 transcriber.transcribe_audio("data/input/sample.mp3", "data/transcriptions/transcribed_sample.txt")
 ```
 
-### **2️⃣ Summarize & Structure Text**
+### **4.2 Summarization & Structuring**
 ```python
 from src.structurer import TextStructurer
 
@@ -86,15 +70,15 @@ structurer = TextStructurer(models=["facebook/bart-large-cnn", "t5-small"], verb
 summary = structurer.summarize_text("data/transcriptions/transcribed_sample.txt", model="facebook/bart-large-cnn")
 ```
 
-### **3️⃣ Expand Summary into a Book Chapter**
+### **4.3 Long-Form Chapter Generation (LLM Augmentation)**
 ```python
 from src.chapter_creator import ChapterCreator
 
 chapter_creator = ChapterCreator(model="gpt-4", api_key="YOUR_OPENAI_KEY")
-book_chapter = chapter_creator.generate_chapter(summary, book_genre="Science Fiction")
+book_chapter = chapter_creator.generate_chapter(summary, book_genre="Technical Writing")
 ```
 
-### **4️⃣ Export to Notion**
+### **4.4 Exporting to Notion API**
 ```python
 from src.exporter import NotionExporter
 
@@ -104,62 +88,68 @@ notion.upload_to_notion(book_chapter, page_title="New Chapter")
 
 ---
 
-## **📚 Output Examples**
-### **🔹 Summarized Content**
-```text
-In a world where artificial intelligence governs human society, a young hacker uncovers a secret that could change everything...
-```
+## **5. Evaluation Metrics & Benchmarking**
+Narratize incorporates various **quantitative evaluation metrics** to assess transcription accuracy, summarization fidelity, and structured output coherence:
 
-### **🔹 Expanded Book Chapter**
-```markdown
-# Chapter 1: The Hidden Code
+| **Metric**              | **Description** |
+|------------------------|--------------------------------------------------------------------|
+| **WER (Word Error Rate)** | Measures ASR transcription accuracy. Lower is better.          |
+| **ROUGE (Recall-Oriented Understudy for Gisting Evaluation)** | Assesses summarization overlap. |
+| **BERTScore**          | Semantic similarity score between generated and reference texts. |
+| **Compression Ratio**  | Evaluates content reduction efficiency without loss of meaning.  |
 
-In the sprawling megacity of Neo-Tokyo, the streets hummed with the quiet murmur of drones and self-driving taxis. Among them, a hooded figure slipped unnoticed through the shadows...
+To benchmark performance, execute:
+```python
+from evaluation import evaluate_model
 
-"Are you sure about this?" asked Alex, his fingers hovering over the keyboard. The encrypted message glowed on his screen...
-```
-
-### **🔹 Structured Podcast Script**
-```text
-Alice: "Did you know that AI can now write entire books?"
-Bob: "That's fascinating! But what does it mean for authors?"
-Alice: "Well, it could revolutionize storytelling..."
+evaluate_model("data/transcriptions/transcribed_sample.txt", "data/structured_text/structured_sample.txt")
 ```
 
 ---
 
-## **⚙️ Configuration (Optional)**
-You can customize settings in `configs/settings.yaml`:
-```yaml
-whisper_model: "medium"
-language: "en"
-max_summary_length: 350
-min_summary_length: 120
-export_format: "notion"
+## **6. Applications & Research Potential**
+- **Automated Audiobook and Podcast Production**: Streamline the conversion of spoken content into structured books and formatted dialogues.
+- **Lecture & Meeting Summarization**: Enhance accessibility of recorded academic and business discussions.
+- **NLP & AI Research**: Utilize structured AI-generated text for further **fine-tuning models**.
+- **Legal & Compliance Documentation**: Transform recorded testimonies into structured, reviewable documentation.
+- **Digital Humanities & Archival Research**: Automate transcription and structuring of historical recordings.
+
+---
+
+## **7. Contribution Guidelines**
+We encourage contributions from the research and developer community. To contribute:
+1. **Fork the repository**.
+2. **Create a new feature branch** (`feature-xyz`).
+3. **Follow the PEP8/PEP257 coding style**.
+4. **Submit a PR with detailed documentation and test cases**.
+
+Ensure all new features pass existing unit tests:
+```bash
+pytest tests/
 ```
 
 ---
 
-## **📈 Possible Applications**
-✅ **Automated Audiobook Creation**  
-✅ **Content Repurposing for Blogs, Newsletters, and Podcasts**  
-✅ **Summarizing Lectures and Meetings**  
-✅ **Generating Training Material for AI & NLP Research**  
-✅ **Academic Research - Converting Transcribed Interviews into Papers**  
+## **8. License & Citation**
+This project is released under the **MIT License**.
+For academic use, please cite:
+```latex
+@misc{narratize2024,
+  title={Narratize: AI-Driven Audio Structuring Framework},
+  author={William Bendinelli et al.},
+  year={2024},
+  howpublished={\url{https://github.com/wbendinelli/narratize}}
+}
+```
 
 ---
 
-## **👨‍💻 Contributing**
-We welcome contributions!  
-To contribute, fork the repo, make your changes, and submit a PR.  
-Make sure to follow our coding guidelines in `.github/CONTRIBUTING.md`.
+## **9. Roadmap & Future Work**
+- 📌 **Fine-tune ASR models for specialized domains**
+- 📌 **Implement multi-modal summarization pipelines**
+- 📌 **Develop interactive UI for text generation refinement**
+- 📌 **Enhance LLMs to support domain-specific chapter structuring**
 
 ---
 
-## **📃 License**
-This project is licensed under the **MIT License**.
-
----
-
-**🚀 Ready to transform your audio into books & podcasts? Let's get started with Narratize!**
-
+**🚀 Narratize: A Research-Grade AI Framework for Structured Audio-to-Text Processing**
