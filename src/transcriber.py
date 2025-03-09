@@ -1,195 +1,280 @@
-import whisper
-import os
-import datetime
-import json
-import logging
 from pathlib import Path
-import time
-import sys  # Required to ensure logs display correctly in Colab
+import sys
+import logging
+import torch
+import whisper
+import soundfile as sf
+import numpy as np
+import datetime
+import librosa
+import gc
+import language_tool_python
 
 class Transcriber:
     """
-    A class to handle audio transcription using the Whisper model.
-
-    This class provides functionality for transcribing audio files, saving outputs in multiple formats,
-    and managing transcription logs for better tracking.
+    A class for processing and transcribing audio files efficiently using OpenAI's Whisper model.
+    It supports splitting large audio files, speaker recognition, and grammar correction.
     """
 
-    def __init__(self, model_size="medium", language=None, temperature=0.0, 
-                 no_speech_threshold=0.3, logprob_threshold=-1.0, compression_ratio_threshold=2.5, 
-                 verbose=False, output_dir="/content/drive/MyDrive/narratize/data/transcriptions"):
+    def __init__(self, model_size="small", language="pt", use_gpu=True, output_dir="transcriptions",
+                 segment_duration=60, silence_threshold=1.5):
         """
-        Initializes the Whisper transcription model with customizable parameters.
+        Initializes the transcriber with specified parameters.
 
-        Parameters:
-            model_size (str): Whisper model size. Options: "tiny", "base", "small", "medium", "large".
-            language (str, optional): Preferred language for transcription (None for auto-detection).
-            temperature (float): Decoding temperature (0 = deterministic, higher = more variation).
-            no_speech_threshold (float): Minimum probability threshold to detect speech.
-            logprob_threshold (float): Minimum log probability for valid transcription.
-            compression_ratio_threshold (float): Maximum allowed compression ratio for a valid transcription.
-            verbose (bool): If True, enables detailed logging.
-            output_dir (str): Directory where transcriptions will be stored.
+        Args:
+            model_size (str): Whisper model size to use ('tiny', 'small', 'medium', 'large').
+            language (str): Language for transcription.
+            use_gpu (bool): Whether to use GPU acceleration.
+            output_dir (str): Directory for saving transcriptions.
+            segment_duration (int): Maximum duration of each audio segment in seconds.
+            silence_threshold (float): Minimum silence gap to detect speaker change.
         """
         self.model_size = model_size
         self.language = language
-        self.temperature = temperature
-        self.no_speech_threshold = no_speech_threshold
-        self.logprob_threshold = logprob_threshold
-        self.compression_ratio_threshold = compression_ratio_threshold
-        self.verbose = verbose
+        self.use_gpu = use_gpu and torch.cuda.is_available()
         self.output_dir = Path(output_dir)
+        self.segment_duration = segment_duration  
+        self.silence_threshold = silence_threshold  
 
-        # Configure logging to ensure real-time display in Colab
+        # Configure logging
         logging.basicConfig(
-            level=logging.DEBUG if verbose else logging.WARNING,
+            level=logging.INFO,
             format="%(asctime)s - %(levelname)s - %(message)s",
             handlers=[logging.StreamHandler(sys.stdout)],
             force=True
         )
         self.logger = logging.getLogger(__name__)
-
-        # Ensure the output directory exists
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-        self._log_step("[1/6] Initializing Transcriber...")
-        self._log_step(f"Model: {model_size}, Language: {language or 'Auto'}, Temperature: {temperature}")
+        self.model = None
+        self.tool = language_tool_python.LanguageTool("pt-BR")
 
-        # Load Whisper model
-        self._log_step("[2/6] Loading Whisper model...")
-        self.model = whisper.load_model(model_size)
-        self._log_step("Whisper model loaded successfully.")
-
-    def _clear_previous_outputs(self):
+    def log_step(self, message):
         """
-        Deletes all previous transcription files in the output directory before running a new transcription.
-
-        Ensures that previous outputs do not interfere with new transcriptions.
+        Logs messages with INFO level.
+        
+        Args:
+            message (str): Log message.
         """
-        self._log_step(f"[3/6] Deleting previous transcription files in: {self.output_dir}")
-        for file in self.output_dir.glob("*"):
-            try:
-                file.unlink()
-                self._log_step(f"Deleted: {file}")
-            except Exception as e:
-                self.logger.warning(f"Could not delete {file}: {e}")
-        self._log_step("Cleanup completed.")
+        self.logger.info(message)
+        sys.stdout.flush()
 
-    def transcribe_audio(self, audio_path, output_file=None, save_txt=True, save_srt=True, save_json=True):
+    def load_model(self):
+        """ Loads the Whisper model into memory. """
+        self.log_step("Loading Whisper model...")
+        device = "cuda" if self.use_gpu else "cpu"
+
+        try:
+            self.model = whisper.load_model(self.model_size, device=device)
+            self.log_step("Whisper model successfully loaded.")
+        except Exception as e:
+            self.log_step(f"Error loading Whisper model: {e}")
+            raise
+
+    def transcribe_audio(self, audio_path):
         """
-        Transcribes an audio file using Whisper and saves the transcript in various formats.
+        Full pipeline for transcribing a single audio file.
 
-        Parameters:
-            audio_path (str): Path to the input audio file.
-            output_file (str, optional): Custom filename for the transcription (without extension).
-            save_txt (bool): If True, saves the transcription as a .txt file.
-            save_srt (bool): If True, saves subtitles as a .srt file.
-            save_json (bool): If True, saves the full Whisper output as a .json file.
+        Args:
+            audio_path (str or Path): Path to the audio file.
+        """
+        audio_path = Path(audio_path)
+        if not audio_path.exists():
+            self.log_step(f"File not found: {audio_path}")
+            return
+
+        self.log_step(f"Processing: {audio_path.name}")
+
+        # Step 1: Split audio into segments
+        segments = self._split_audio(audio_path)
+        if not segments:
+            self.log_step(f"No valid segments found for {audio_path.name}. Skipping.")
+            return
+
+        transcribed_text = []
+        accumulated_time = 0
+
+        # Step 2: Transcribe each segment sequentially
+        for segment in segments:
+            self.log_step(f"Transcribing segment: {segment.name}... Running in background.")
+            formatted_text, duration = self._transcribe_segment(segment, accumulated_time)
+            if formatted_text:
+                transcribed_text.append(formatted_text)
+                accumulated_time += duration
+
+            torch.cuda.empty_cache()
+            gc.collect()
+
+        if not transcribed_text:
+            self.log_step(f"Transcription failed for {audio_path.name}.")
+            return
+
+        final_text = "\n".join(transcribed_text)
+
+        # Step 3: Apply grammar correction
+        self.log_step(f"Applying grammar correction for {audio_path.name}...")
+        final_text = self.correct_text(final_text)
+
+        # Step 4: Save transcription
+        output_file = self.output_dir / f"{audio_path.stem}_transcription.txt"
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(final_text)
+
+        self.log_step(f"File saved: {output_file}")
+
+        # Step 5: Remove temporary files
+        self._cleanup_segments(segments)
+
+    def _split_audio(self, audio_path):
+        """
+        Splits an audio file into smaller segments.
+
+        Args:
+            audio_path (Path): Path to the audio file.
 
         Returns:
-            dict: Whisper transcription result.
+            list: List of segmented audio file paths.
         """
-        # Convert to Path object for better path handling
-        audio_path = Path(audio_path)
+        self.log_step(f"Splitting audio: {audio_path.name}")
 
-        # Validate if the audio file exists
-        if not audio_path.exists():
-            raise FileNotFoundError(f"Audio file not found: {audio_path}")
+        try:
+            audio, sample_rate = librosa.load(audio_path, sr=16000, mono=True)
+        except Exception as e:
+            self.log_step(f"Error loading audio file {audio_path.name}: {e}")
+            return []
 
-        self._log_step(f"[4/6] Preparing transcription for: {audio_path.name}")
+        duration = librosa.get_duration(y=audio, sr=sample_rate)
 
-        # Remove previous transcription files before starting a new one
-        self._clear_previous_outputs()
+        if duration <= self.segment_duration:
+            return [audio_path]
 
-        # Generate default filename if not provided
-        if output_file is None:
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            base_name = audio_path.stem
-            output_file = self.output_dir / f"{base_name}_{timestamp}"
+        segments = []
+        num_segments = int(np.ceil(duration / self.segment_duration))
+        overlap = 0.5  # 500ms overlap to avoid cut-off issues
 
-        output_file = Path(output_file)
+        for i in range(num_segments):
+            start_time = max(0, i * self.segment_duration - overlap)
+            end_time = min(duration, (i + 1) * self.segment_duration)
 
-        # Ensure output directory exists
-        output_file.parent.mkdir(parents=True, exist_ok=True)
+            start_sample = int(start_time * sample_rate)
+            end_sample = int(end_time * sample_rate)
+            segment_audio = audio[start_sample:end_sample]
 
-        # Start transcription
-        self._log_step("[5/6] Running Whisper model for transcription...")
-        transcribe_params = {
-            "language": self.language,
-            "temperature": self.temperature,
-            "no_speech_threshold": self.no_speech_threshold,
-            "logprob_threshold": self.logprob_threshold,
-            "compression_ratio_threshold": self.compression_ratio_threshold
-        }
-        transcribe_params = {k: v for k, v in transcribe_params.items() if v is not None}
+            if len(segment_audio) / sample_rate < 2:
+                continue  
 
-        result = self.model.transcribe(str(audio_path), **transcribe_params)
+            segment_path = self.output_dir / f"{audio_path.stem}.part{i}.wav"
+            sf.write(segment_path, segment_audio, sample_rate)
+            segments.append(segment_path)
+            self.log_step(f"Created segment {i+1}/{num_segments}: {segment_path.name}")
 
-        # Ensure the transcription contains text
-        if not result["text"].strip():
-            raise ValueError("No transcription output detected. Check the audio file or parameters.")
+        return segments
 
-        self._log_step("Transcription completed successfully.")
+    def _cleanup_segments(self, segments):
+        """
+        Deletes temporary audio segments after processing.
 
-        # Save transcription in different formats
-        self._log_step("[6/6] Saving transcription outputs...")
-        if save_txt:
-            txt_file = output_file.with_suffix(".txt")
-            self._save_text(result["text"], txt_file)
+        Args:
+            segments (list): List of segment file paths.
+        """
+        for segment in segments:
+            if Path(segment).exists():
+                Path(segment).unlink()
+                self.log_step(f"Deleted segment: {segment.name}")
 
-        if save_srt:
-            srt_file = output_file.with_suffix(".srt")
-            self._save_srt(result, srt_file)
+    def _transcribe_segment(self, segment_path, accumulated_time):
+        """
+        Transcribes an audio segment.
 
-        if save_json:
-            json_file = output_file.with_suffix(".json")
-            self._save_json(result, json_file)
+        Args:
+            segment_path (Path): Path to the audio segment.
+            accumulated_time (float): Time offset for accurate timestamps.
 
-        # Force Google Drive sync
-        self._sync_google_drive()
+        Returns:
+            tuple: (Transcribed text, segment duration)
+        """
+        if not segment_path.exists():
+            self.log_step(f"Skipping missing segment: {segment_path}")
+            return "", 0
 
-        self._log_step("All files saved successfully.")
-   
-        return result
-    
-    def _save_text(self, text, file_path):
-        """Saves the transcribed text as a .txt file."""
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(text)
-        self._log_step(f"Saved transcription (TXT): {file_path}")
+        try:
+            audio = whisper.load_audio(str(segment_path))
+            if audio.shape[0] == 0:
+                self.log_step(f"Skipping empty segment: {segment_path.name}")
+                return "", 0
 
-    def _save_srt(self, result, file_path):
-        """Saves the transcription as an .srt subtitle file."""
-        with open(file_path, "w", encoding="utf-8") as f:
-            for segment in result["segments"]:
-                start = self.format_timestamp(segment["start"])
-                end = self.format_timestamp(segment["end"])
-                text = segment["text"]
-                f.write(f"{segment['id'] + 1}\n{start} --> {end}\n{text}\n\n")
-        self._log_step(f"Saved subtitles (SRT): {file_path}")
+            result = self.model.transcribe(audio, language=self.language)
+        except Exception as e:
+            self.log_step(f"Error transcribing with Whisper: {e}")
+            return "", 0
 
-    def _save_json(self, result, file_path):
-        """Saves the full Whisper output as a JSON file."""
-        with open(file_path, "w", encoding="utf-8") as f:
-            json.dump(result, f, indent=4)
-        self._log_step(f"Saved transcription metadata (JSON): {file_path}")
+        if "segments" not in result or not result["segments"]:
+            return "", 0
 
-    def _sync_google_drive(self):
-        """Forces synchronization with Google Drive to ensure files are saved properly."""
-        self._log_step("Forcing Google Drive sync...")
-        time.sleep(5)
-        self._log_step("Google Drive sync completed.")
+        formatted_text = []
+        last_timestamp = 0
+        speaker_count = 1
 
-    @staticmethod
-    def format_timestamp(seconds):
-        """Formats a timestamp to HH:MM:SS,MS format for SRT files."""
-        hours, remainder = divmod(seconds, 3600)
-        minutes, seconds = divmod(remainder, 60)
-        milliseconds = int((seconds - int(seconds)) * 1000)
-        return f"{int(hours):02}:{int(minutes):02}:{int(seconds):02},{milliseconds:03}"
+        for seg in result["segments"]:
+            start_time = accumulated_time + seg["start"]
+            text = seg["text"].strip()
 
-    def _log_step(self, message):
-        """Helper function to log steps for visibility in Colab."""
-        print(message)
-        sys.stdout.flush()
-        self.logger.info(message)
+            if seg["start"] - last_timestamp > self.silence_threshold:
+                speaker_count += 1
+
+            formatted_text.append(f"[{self._format_timestamp(start_time)}] [Speaker {speaker_count}] {text}")
+            last_timestamp = seg["end"]
+
+        segment_duration = result["segments"][-1]["end"] if result["segments"] else 0
+        return "\n".join(formatted_text), segment_duration
+
+    def _format_timestamp(self, seconds):
+        """
+        Converts time in seconds to HH:MM:SS format.
+
+        Args:
+            seconds (int): Time in seconds.
+
+        Returns:
+            str: Formatted timestamp in HH:MM:SS.
+        """
+        return str(datetime.timedelta(seconds=int(seconds)))
+
+    def correct_text(self, text):
+        """
+        Applies grammar correction using LanguageTool.
+
+        Args:
+            text (str): Transcribed text.
+
+        Returns:
+            str: Corrected text with improved grammar.
+        """
+        return self.tool.correct(text)
+
+# Exempla Usage
+
+if __name__ == "__main__":
+    # Directory containing audio files
+    audio_dir = Path("/content/drive/MyDrive/audio_files")
+    output_dir = Path("/content/drive/MyDrive/narratize/data/transcriptions")
+
+    # Ensure output directory exists
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Get list of all audio files (MP3 and WAV)
+    audio_files = list(audio_dir.glob("*.mp3")) + list(audio_dir.glob("*.wav"))
+
+    if not audio_files:
+        print("No audio files found in the directory.")
+        sys.exit()
+
+    # Initialize the transcriber
+    transcriber = Transcriber(model_size="small", language="pt", use_gpu=True, output_dir=output_dir)
+
+    # Load the Whisper model once
+    transcriber.load_model()
+
+    # Process each file sequentially
+    for audio_file in audio_files:
+        transcriber.transcribe_audio(audio_file)

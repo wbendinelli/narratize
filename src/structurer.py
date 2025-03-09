@@ -1,32 +1,31 @@
+from openai import OpenAI
+
+client = OpenAI()
 import os
-import json
 import logging
 from pathlib import Path
-import torch
-from transformers import pipeline, AutoTokenizer
 
 class TextStructurer:
-    def __init__(self, models=None, 
-                 max_summary_length=300, min_summary_length=100, 
-                 stride=256, verbose=True, device=None):
-        """
-        Initializes the TextStructurer with multiple summarization models.
+    """
+    Processa transcrições e gera resumos estruturados utilizando a API da OpenAI.
+    """
 
-        Parameters:
-            models (list): List of Hugging Face models for summarization.
-            max_summary_length (int): Maximum length of summaries.
-            min_summary_length (int): Minimum length of summaries.
-            stride (int): Overlapping tokens to retain context.
-            verbose (bool): Whether to print logs.
-            device (str): Device to use ('cpu', 'cuda', or None for auto-selection).
+    def __init__(self, model="gpt-3.5-turbo", temperature=0.5, max_tokens=800, verbose=True):
         """
+        Inicializa o TextStructurer com parâmetros ajustáveis.
+
+        Args:
+            model (str): Modelo da OpenAI a ser usado ("gpt-3.5-turbo" ou "gpt-4-turbo").
+            temperature (float): Criatividade do modelo (0.0 = resposta objetiva, 1.0 = mais criativo).
+            max_tokens (int): Número máximo de tokens na saída.
+            verbose (bool): Se True, ativa logs detalhados.
+        """
+        self.model = model
+        self.temperature = temperature
+        self.max_tokens = max_tokens
         self.verbose = verbose
-        self.max_summary_length = max_summary_length
-        self.min_summary_length = min_summary_length
-        self.stride = stride
-        self.models = models or ["facebook/bart-large-cnn", "google/pegasus-cnn_dailymail", "t5-small"]
 
-        # Configure logging
+        # Configuração de logging
         self.logger = logging.getLogger(__name__)
         if not self.logger.handlers:
             handler = logging.StreamHandler()
@@ -34,156 +33,111 @@ class TextStructurer:
             self.logger.addHandler(handler)
         self.logger.setLevel(logging.INFO if verbose else logging.WARNING)
 
-        # Automatically select device if not provided
-        if device is None:
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        else:
-            self.device = device
-
-        self.logger.info(f"STEP 1/3: Using device: {self.device}")
-
-        # Load summarization models
-        self.summarizers = {}
-        self.tokenizers = {}
-        for model in self.models:
-            self.logger.info(f"  - Loading summarization model: {model}...")
-            try:
-                self.summarizers[model] = pipeline("summarization", model=model, device=0 if self.device == "cuda" else -1)
-                self.tokenizers[model] = AutoTokenizer.from_pretrained(model)
-                self.logger.info(f"  - Model {model} successfully loaded.")
-            except Exception as e:
-                self.logger.error(f"Failed to load model {model}: {str(e)}")
-
-    def summarize_text(self, text):
+    def _generate_prompt(self, text, style="podcast"):
         """
-        Summarizes the input text using multiple models.
+        Gera um prompt estruturado para a OpenAI com base no estilo escolhido.
 
-        Parameters:
-            text (str): Input text for summarization.
+        Args:
+            text (str): Texto transcrito a ser processado.
+            style (str): Estilo do resumo ("academic", "business", "podcast").
 
         Returns:
-            dict: Dictionary with model names as keys and their corresponding summaries.
+            str: Prompt formatado para a OpenAI.
         """
-        self.logger.info("STEP 2/3: Summarizing text with multiple models...")
+        templates = {
+            "academic": f"""
+            Analise o seguinte conteúdo acadêmico e crie um resumo estruturado:
+            
+            {text}
 
-        summaries = {}
-        for model, summarizer in self.summarizers.items():
-            tokenizer = self.tokenizers[model]
-            token_limit = min(1024, self.max_summary_length * 2)  # Ajuste do tamanho máximo permitido
+            Estruture a resposta da seguinte forma:
 
-            tokens = tokenizer(text, truncation=False, return_tensors="pt")
-            num_tokens = tokens.input_ids.shape[1]
+            # Introdução
+            [Resumo do tema principal e contexto acadêmico]
 
-            if num_tokens > token_limit:
-                self.logger.info(f"  - Text exceeds model token limit ({token_limit} tokens), processing in chunks...")
-                chunks = self._split_into_chunks(text, tokenizer, token_limit)
-            else:
-                chunks = [text]
+            # Descobertas Principais
+            - [Ponto 1 com evidências]
+            - [Ponto 2 com evidências]
+            - [Ponto 3 com evidências]
 
-            model_summaries = []
-            for i, chunk in enumerate(chunks):
-                self.logger.info(f"    - Processing chunk {i+1}/{len(chunks)}")
-                summary = summarizer(chunk, 
-                                     max_length=self.max_summary_length, 
-                                     min_length=self.min_summary_length, 
-                                     do_sample=False)
-                model_summaries.append(summary[0]["summary_text"])
+            # Aplicações Práticas
+            - [Como essa pesquisa pode ser aplicada?]
 
-            summaries[model] = " ".join(model_summaries)
+            # Perguntas para Reflexão
+            1. [Pergunta sobre a metodologia]
+            2. [Pergunta sobre implicações futuras]
+            """,
 
-        return summaries
+            "business": f"""
+            Gere um resumo executivo deste conteúdo empresarial:
 
-    def _split_into_chunks(self, text, tokenizer, token_limit):
+            {text}
+
+            Estrutura do resumo:
+
+            # Visão Geral
+            [Resumo rápido do tema principal]
+
+            # Oportunidades de Mercado
+            - [Ponto chave 1]
+            - [Ponto chave 2]
+
+            # Desafios e Riscos
+            - [Desafio 1]
+            - [Desafio 2]
+
+            # Métricas e Indicadores
+            [Principais KPIs mencionados]
+
+            # Conclusão e Ação Recomendável
+            [Resumo final e insights principais]
+            """,
+
+            "podcast": f"""
+            Estruture um resumo detalhado deste episódio de podcast:
+
+            {text}
+
+            Estrutura:
+
+            # Destaques do Episódio
+            - [Tópico principal abordado]
+            - [Tópico secundário abordado]
+
+            # Momentos Memoráveis
+            > "Citação importante"
+
+            # Lições e Insights
+            - [Lição 1]
+            - [Lição 2]
+
+            # Recursos Citados
+            - [Livros, sites ou referências mencionadas]
+
+            # Reflexão Final
+            [Resumo do episódio e impacto]
+            """
+        }
+
+        return templates.get(style, templates["podcast"])
+
+    def summarize_text(self, transcription_text, style="podcast"):
         """
-        Splits a long text into smaller chunks ensuring each chunk is within model token limits.
+        Gera um resumo estruturado usando a OpenAI.
 
-        Parameters:
-            text (str): The input text.
-            tokenizer: Tokenizer of the selected model.
-            token_limit (int): Maximum token limit per chunk.
+        Args:
+            transcription_text (str): Texto transcrito.
+            style (str): Estilo do resumo ("academic", "business", "podcast").
 
         Returns:
-            list: List of text chunks.
+            str: Resumo gerado.
         """
-        words = text.split()
-        chunks = []
-        start = 0
+        prompt = self._generate_prompt(transcription_text, style)
 
-        while start < len(words):
-            end = min(start + token_limit, len(words))
-            chunk = " ".join(words[start:end])
+        response = client.chat.completions.create(model=self.model,
+        messages=[{"role": "system", "content": "Você é um especialista em análise de texto e estruturação de resumos."},
+                  {"role": "user", "content": prompt}],
+        temperature=self.temperature,
+        max_tokens=self.max_tokens)
 
-            # Ensure the chunk doesn't exceed token limit
-            while len(tokenizer(chunk)["input_ids"]) > token_limit and end > start:
-                end -= 1
-                chunk = " ".join(words[start:end])
-
-            chunks.append(chunk)
-            start = end  # Move forward
-
-        return chunks
-
-    def process_transcription(self, input_file, output_dir=None, output_filename="structured_output"):
-        """
-        Processes a transcribed file and summarizes its content with multiple models.
-
-        Parameters:
-            input_file (str): Path to the transcribed text file.
-            output_dir (str, optional): Directory to save the structured output.
-            output_filename (str): Custom output filename (without extension).
-
-        Returns:
-            dict: Dictionary with summaries from each model.
-        """
-        self.logger.info("STEP 3/3: Processing transcription file...")
-
-        input_path = Path(input_file)
-        if not input_path.exists():
-            raise FileNotFoundError(f"Transcribed file not found: {input_file}")
-
-        with open(input_path, "r", encoding="utf-8") as f:
-            transcribed_text = f.read()
-
-        summaries = self.summarize_text(transcribed_text)
-
-        output_dir = Path(output_dir or input_path.parent)
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        summary_files = {}
-        for model, summary in summaries.items():
-            model_name = model.replace("/", "_")  # Safe filename
-            output_path = output_dir / f"{output_filename}_{model_name}.txt"
-
-            with open(output_path, "w", encoding="utf-8") as f:
-                f.write(summary)
-
-            self.logger.info(f"  - Summarized text saved at: {output_path}")
-            summary_files[model] = output_path
-
-        return summary_files
-
-
-# ---------------------- EXAMPLE USAGE ----------------------
-if __name__ == "__main__":
-    structurer = TextStructurer(
-        models=["facebook/bart-large-cnn", "google/pegasus-cnn_dailymail", "t5-small"],  # Multiple models
-        verbose=True,
-        max_summary_length=300,
-        min_summary_length=100,
-        stride=256,  # Overlap to maintain context
-        device="auto"  # Automatically select CPU/GPU
-    )
-
-    input_file = "/content/drive/MyDrive/narratize/data/transcriptions/transcribed_sample.txt"
-    output_dir = "/content/drive/MyDrive/narratize/data/structured"
-    output_filename = "structured_output"
-
-    summary_results = structurer.process_transcription(
-        input_file=input_file,
-        output_dir=output_dir,
-        output_filename=output_filename
-    )
-
-    print("\n--- Summarized Outputs ---\n")
-    for model, file_path in summary_results.items():
-        print(f"Model: {model} -> Summary saved at: {file_path}")
+        return response.choices[0].message.content
