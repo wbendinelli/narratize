@@ -4,10 +4,12 @@ numpy
 torch
 torchaudio
 transformers
-whisper
 openai
 flask
 flask_login
 flask_sqlalchemy
 werkzeug
 requests
+whisper
+ffmpeg-python
+uv
