@@ -2,9 +2,10 @@ import streamlit as st
 import torch
 import whisper
 import os
+import ffmpeg
 from pathlib import Path
 
-# ✅ Mover o set_page_config para o topo
+# ✅ Configuração inicial do Streamlit
 st.set_page_config(page_title="🎙️ Transcrição de Áudio", layout="centered")
 
 st.title("🎙️ Transcrição de Áudio com IA")
@@ -33,12 +34,21 @@ if uploaded_file is not None:
             with open(temp_audio_path, "wb") as f:
                 f.write(uploaded_file.read())
 
+            # ✅ Converter para WAV usando ffmpeg-python (corrige erro do ffmpeg)
+            converted_audio_path = temp_audio_path.with_suffix(".wav")
+            try:
+                ffmpeg.input(str(temp_audio_path)).output(str(converted_audio_path)).run(overwrite_output=True)
+            except ffmpeg.Error as e:
+                st.error(f"Erro ao converter áudio: {e}")
+                os.remove(temp_audio_path)
+                st.stop()
+
             # ✅ Carregar o modelo Whisper
             device = "cuda" if use_gpu and torch.cuda.is_available() else "cpu"
             model = whisper.load_model(model_size, device=device)
 
             # ✅ Transcrição do áudio
-            result = model.transcribe(str(temp_audio_path), language=lang_code)
+            result = model.transcribe(str(converted_audio_path), language=lang_code)
 
             # ✅ Exibir transcrição
             st.subheader("📜 Transcrição:")
@@ -57,3 +67,4 @@ if uploaded_file is not None:
 
             # 🗑️ Remover arquivos temporários
             os.remove(temp_audio_path)
+            os.remove(converted_audio_path)
