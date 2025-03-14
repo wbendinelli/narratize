@@ -35,6 +35,7 @@ if uploaded_file is not None:
 
             # ✅ Criar instância do transcriber
             transcriber = Transcriber(model_size=model_size, language=lang_code, use_gpu=use_gpu)
+            transcriber.load_model()
 
             # ✅ Fazer a transcrição
             transcription = transcriber.transcribe_audio(str(temp_audio_path))
