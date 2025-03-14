@@ -14,3 +14,4 @@ datetime
 logging
 imageio[ffmpeg]
 ffmpeg-python
+librosa
