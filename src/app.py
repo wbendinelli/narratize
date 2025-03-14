@@ -17,8 +17,8 @@ st.write("Faça upload de um arquivo de áudio para transcrição! (Formatos sup
 model_size = st.selectbox("Selecione o modelo Whisper:", ["tiny", "base", "small", "medium", "large"])
 
 # 🔹 Escolha do idioma
-language = st.selectbox("Escolha o idioma:", ["Português (pt)", "Inglês (en)", "Espanhol (es)"])
-lang_code = {"Português (pt)": "pt", "Inglês (en)", "Espanhol (es)"}[language]
+language = st.selectbox("Escolha o idioma:", ["Português", "Inglês", "Espanhol"])
+lang_code = {"Português": "pt", "Inglês": "en", "Espanhol": "es"}[language]  # ✅ Agora está correto
 
 # 🔹 Opção de GPU (se disponível)
 use_gpu = st.checkbox("Usar GPU (se disponível)", value=torch.cuda.is_available())
