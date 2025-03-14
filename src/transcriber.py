@@ -7,8 +7,7 @@ import soundfile as sf
 import numpy as np
 import datetime
 from pathlib import Path
-from pydub import AudioSegment  # 🔥 Apenas para carregar MP3/M4A, sem conversão
-import torchaudio  # 🔥 Para WAV
+import torchaudio  # 🔥 Carregamento eficiente de áudio
 
 class Transcriber:
     def __init__(self, model_size="small", language="pt", use_gpu=True,
@@ -46,7 +45,7 @@ class Transcriber:
         if not audio_path.exists():
             raise FileNotFoundError(f"Arquivo de áudio não encontrado: {audio_path}")
 
-        # 🔥 Carregar o áudio no formato original
+        # 🔥 Carregar o áudio sem conversão
         waveform, sample_rate = self._load_audio(audio_path)
 
         self.log_step(f"Step 2/5: Verificando e dividindo áudio, se necessário - {audio_path.name}")
@@ -54,9 +53,7 @@ class Transcriber:
 
         if not segments:
             self.log_step(f"Nenhum segmento encontrado para transcrição - {audio_path}")
-            return
-
-        output_file = self.output_dir / f"{audio_path.stem}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+            return ""
 
         transcribed_text = []
         accumulated_time = 0
@@ -70,25 +67,22 @@ class Transcriber:
 
         final_text = "\n".join(transcribed_text)
 
-        with open(output_file, "w", encoding="utf-8") as f:
-            f.write(final_text)
-        self.log_step(f"✔ Arquivo TXT salvo: {output_file}")
-
-        self._cleanup_segments(segments)
+        return final_text
 
     def _load_audio(self, audio_path):
-        """Carrega áudio em WAV, MP3 ou M4A sem conversão."""
+        """Carrega MP3, M4A e WAV sem conversão."""
         ext = audio_path.suffix.lower()
         
-        if ext == ".wav":
-            waveform, sample_rate = torchaudio.load(audio_path)
-        else:
-            audio = AudioSegment.from_file(audio_path, format=ext[1:])  # Remove o "."
-            sample_rate = audio.frame_rate
-            samples = np.array(audio.get_array_of_samples()).astype(np.float32)
-            waveform = torch.tensor(samples).unsqueeze(0) / 32768.0  # Normaliza
+        try:
+            if ext == ".wav":
+                waveform, sample_rate = torchaudio.load(audio_path)
+            else:
+                waveform, sample_rate = sf.read(audio_path, always_2d=True)
+                waveform = torch.tensor(waveform).float().T  # Ajusta para PyTorch
 
-        return waveform, sample_rate
+            return waveform, sample_rate
+        except Exception as e:
+            raise RuntimeError(f"Erro ao carregar áudio ({audio_path}): {e}")
 
     def _split_audio(self, waveform, sample_rate, audio_path):
         """Divide o áudio em segmentos se necessário."""
@@ -124,6 +118,10 @@ class Transcriber:
 
         segment_duration = result['segments'][-1]['end']
         return "\n".join(formatted_text), segment_duration
+
+    def _format_timestamp(self, seconds):
+        """Formata timestamps no estilo HH:MM:SS."""
+        return str(datetime.timedelta(seconds=int(seconds)))
 
     def _cleanup_segments(self, segments):
         """Remove arquivos temporários."""
