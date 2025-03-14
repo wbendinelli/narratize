@@ -12,3 +12,4 @@ pathlib
 datetime
 logging
 imageio[ffmpeg]
+ffmpeg-python
