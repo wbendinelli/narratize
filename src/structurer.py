@@ -6,26 +6,20 @@ import logging
 from pathlib import Path
 
 class TextStructurer:
-    """
-    Processa transcrições e gera resumos estruturados utilizando a API da OpenAI.
-    """
-
-    def __init__(self, model="gpt-3.5-turbo", temperature=0.5, max_tokens=800, verbose=True):
-        """
-        Inicializa o TextStructurer com parâmetros ajustáveis.
-
-        Args:
-            model (str): Modelo da OpenAI a ser usado ("gpt-3.5-turbo" ou "gpt-4-turbo").
-            temperature (float): Criatividade do modelo (0.0 = resposta objetiva, 1.0 = mais criativo).
-            max_tokens (int): Número máximo de tokens na saída.
-            verbose (bool): Se True, ativa logs detalhados.
-        """
+    def __init__(self, model="gpt-3.5-turbo", temperature=0.5, max_tokens=800, verbose=True, api_key=None):
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.verbose = verbose
+        
+        # ✅ Use provided API key or environment variable
+        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+        if not self.api_key:
+            raise ValueError("❌ ERROR: OpenAI API key is missing! Set OPENAI_API_KEY or provide it manually.")
 
-        # Configuração de logging
+        openai.api_key = self.api_key
+
+        # Logging configuration
         self.logger = logging.getLogger(__name__)
         if not self.logger.handlers:
             handler = logging.StreamHandler()
