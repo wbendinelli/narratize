@@ -1,9 +1,8 @@
 import streamlit as st
 import torch
 import whisper
-import soundfile as sf
-import os
 import torchaudio
+import os
 from pathlib import Path
 
 # ✅ Configuração inicial do Streamlit
@@ -27,7 +26,9 @@ uploaded_file = st.file_uploader("Faça upload do arquivo de áudio", type=["wav
 
 
 def load_audio(input_audio):
-    """Carrega qualquer formato de áudio usando torchaudio."""
+    """Carrega áudio de qualquer formato usando torchaudio com backend sox_io."""
+    torchaudio.set_audio_backend("sox_io")  # Define backend para melhor compatibilidade
+
     waveform, sample_rate = torchaudio.load(input_audio)
 
     # Convertendo para mono caso o áudio tenha múltiplos canais
@@ -36,7 +37,7 @@ def load_audio(input_audio):
 
     # Salvando o áudio convertido como WAV
     output_wav = Path("temp_audio.wav")
-    sf.write(output_wav, waveform.squeeze().numpy(), sample_rate)
+    torchaudio.save(str(output_wav), waveform, sample_rate)
     return output_wav
 
 
