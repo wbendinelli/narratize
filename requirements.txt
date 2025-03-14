@@ -11,3 +11,4 @@ numpy
 pathlib
 datetime
 logging
+ffmpeg
