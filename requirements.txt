@@ -1,4 +1,4 @@
-# 🔹 Streamlit e bibliotecas essenciais
+# 🔹 Streamlit e UI
 streamlit
 streamlit-authenticator
 
@@ -14,6 +14,9 @@ librosa
 soundfile
 ffmpeg-python
 
+# 🔹 Diarização de falantes
+pyannote.audio
+
 # 🔹 Flask e Autenticação
 flask
 flask-login
@@ -26,3 +29,4 @@ pandas
 requests
 python-dotenv
 language_tool_python
+huggingface_hub
