@@ -2,6 +2,7 @@ import streamlit as st
 import torch
 import whisper
 import torchaudio
+from pydub import AudioSegment
 import os
 from pathlib import Path
 
@@ -25,19 +26,11 @@ use_gpu = st.checkbox("Usar GPU (se disponível)", value=torch.cuda.is_available
 uploaded_file = st.file_uploader("Faça upload do arquivo de áudio", type=["wav", "mp3", "m4a"])
 
 
-def load_audio(input_audio):
-    """Carrega áudio de qualquer formato usando torchaudio com backend sox_io."""
-    torchaudio.set_audio_backend("sox_io")  # Define backend para melhor compatibilidade
-
-    waveform, sample_rate = torchaudio.load(input_audio)
-
-    # Convertendo para mono caso o áudio tenha múltiplos canais
-    if waveform.shape[0] > 1:
-        waveform = waveform.mean(dim=0, keepdim=True)
-
-    # Salvando o áudio convertido como WAV
+def convert_audio_to_wav(input_audio):
+    """Converte arquivos MP3 ou M4A para WAV usando pydub."""
+    audio = AudioSegment.from_file(input_audio)
     output_wav = Path("temp_audio.wav")
-    torchaudio.save(str(output_wav), waveform, sample_rate)
+    audio.export(output_wav, format="wav")
     return output_wav
 
 
@@ -51,8 +44,9 @@ if uploaded_file is not None:
             with open(temp_audio_path, "wb") as f:
                 f.write(uploaded_file.read())
 
-            # ✅ Carregar o áudio usando torchaudio
-            temp_audio_path = load_audio(str(temp_audio_path))
+            # ✅ Converter para WAV, se necessário
+            if temp_audio_path.suffix.lower() != ".wav":
+                temp_audio_path = convert_audio_to_wav(temp_audio_path)
 
             # ✅ Carregar o modelo Whisper
             device = "cuda" if use_gpu and torch.cuda.is_available() else "cpu"
