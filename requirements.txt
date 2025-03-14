@@ -1,26 +1,13 @@
-# Streamlit para interface web
-streamlit
-
-# Modelos de Machine Learning e Transcrição
+# Frameworks de Machine Learning e Processamento de Áudio
 torch
 torchaudio
 whisper
 
-# Processamento de Áudio
-librosa
+# Manipulação de Áudio
 soundfile
-ffmpeg-python
-
-# NLP e Correção Gramatical
-language_tool_python
-
-# Processamento de Voz e Diarização de Locutores
-pyannote.audio
-
-# Dependências Utilitárias
 numpy
-logging
-subprocess32
+
+# Utilitários
 pathlib
 datetime
-gc
+logging
