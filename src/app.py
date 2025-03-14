@@ -3,6 +3,7 @@ import torch
 from transcriber import Transcriber
 import os
 from pathlib import Path
+import time  # Para simular tempo de execução
 
 # ✅ Page Configuration
 st.set_page_config(
@@ -14,7 +15,6 @@ st.set_page_config(
 st.markdown("""
     <style>
     .main { text-align: center; }
-    .css-18e3th9 { padding-top: 2rem; }
     .stButton>button, .stDownloadButton>button { 
         width: 100%; 
         font-size: 16px; 
@@ -36,10 +36,7 @@ st.markdown("""
 
 # ✅ Header
 st.title("🎙️ AI-Powered Audio Transcription")
-st.markdown("""
-    Transform your audio into **high-quality text** with cutting-edge AI technology.  
-    **Supported formats:** WAV, MP3, M4A.  
-""")
+st.markdown("Convert your audio files into **accurate text** using advanced AI models. 🚀")
 
 # 🔹 Model Selection (Limited to "small" for Streamlit compatibility)
 st.subheader("⚙️ Settings")
@@ -64,10 +61,14 @@ if uploaded_file:
     # ✅ Audio Player
     st.audio(uploaded_file, format=f"audio/{uploaded_file.name.split('.')[-1]}")
 
+    # ✅ Log Display Section
+    log_placeholder = st.empty()  # Placeholder for real-time logs
+
     # ✅ Transcription Button
     if st.button("🔍 Start Transcription"):
-        with st.spinner("⏳ Processing... This may take a few seconds."):
-            # ✅ Save the uploaded file temporarily
+        with st.spinner("⏳ Processing... Please wait."):
+
+            # ✅ Save uploaded file temporarily
             temp_audio_path = Path(f"temp_audio.{uploaded_file.name.split('.')[-1]}")
             with open(temp_audio_path, "wb") as f:
                 f.write(uploaded_file.read())
@@ -77,10 +78,14 @@ if uploaded_file:
                 transcriber = Transcriber(model_size=model_size, language=lang_code, use_gpu=use_gpu)
                 transcriber.load_model()
 
-                # ✅ Perform Transcription
-                transcription = transcriber.transcribe_audio(str(temp_audio_path))
+                # ✅ Process Transcription with Live Logs
+                transcription_logs = []
+                for log_message in transcriber.transcribe_with_logs(str(temp_audio_path)):
+                    transcription_logs.append(log_message)
+                    log_placeholder.text_area("📜 Transcription Log:", "\n".join(transcription_logs), height=300)
 
-                # ✅ Display Transcription
+                # ✅ Display Final Transcription
+                transcription = "\n".join(transcription_logs)
                 st.success("✅ Transcription Completed!")
                 st.subheader("📜 Transcribed Text:")
                 st.text_area("Output:", transcription, height=300)
