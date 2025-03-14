@@ -2,17 +2,9 @@ import streamlit as st
 import torch
 import whisper
 import soundfile as sf
-import numpy as np
 import os
+import torchaudio
 from pathlib import Path
-
-try:
-    import librosa
-    LIBROSA_AVAILABLE = True
-except ImportError:
-    import torchaudio
-    LIBROSA_AVAILABLE = False
-
 
 # ✅ Configuração inicial do Streamlit
 st.set_page_config(page_title="🎙️ Transcrição de Áudio", layout="centered")
@@ -35,15 +27,16 @@ uploaded_file = st.file_uploader("Faça upload do arquivo de áudio", type=["wav
 
 
 def load_audio(input_audio):
-    """Carrega qualquer formato de áudio usando librosa (se disponível) ou torchaudio como fallback."""
-    if LIBROSA_AVAILABLE:
-        audio_data, sample_rate = librosa.load(input_audio, sr=16000, mono=True)
-    else:
-        audio_data, sample_rate = torchaudio.load(input_audio)
-        audio_data = audio_data.mean(dim=0).numpy()  # Converte para mono
+    """Carrega qualquer formato de áudio usando torchaudio."""
+    waveform, sample_rate = torchaudio.load(input_audio)
 
+    # Convertendo para mono caso o áudio tenha múltiplos canais
+    if waveform.shape[0] > 1:
+        waveform = waveform.mean(dim=0, keepdim=True)
+
+    # Salvando o áudio convertido como WAV
     output_wav = Path("temp_audio.wav")
-    sf.write(output_wav, audio_data, sample_rate)
+    sf.write(output_wav, waveform.squeeze().numpy(), sample_rate)
     return output_wav
 
 
@@ -57,7 +50,7 @@ if uploaded_file is not None:
             with open(temp_audio_path, "wb") as f:
                 f.write(uploaded_file.read())
 
-            # ✅ Carregar o áudio usando librosa ou torchaudio
+            # ✅ Carregar o áudio usando torchaudio
             temp_audio_path = load_audio(str(temp_audio_path))
 
             # ✅ Carregar o modelo Whisper
