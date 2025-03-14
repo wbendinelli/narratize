@@ -1,11 +1,18 @@
 import streamlit as st
 import torch
 import whisper
-import librosa
 import soundfile as sf
 import numpy as np
 import os
 from pathlib import Path
+
+try:
+    import librosa
+    LIBROSA_AVAILABLE = True
+except ImportError:
+    import torchaudio
+    LIBROSA_AVAILABLE = False
+
 
 # ✅ Configuração inicial do Streamlit
 st.set_page_config(page_title="🎙️ Transcrição de Áudio", layout="centered")
@@ -27,9 +34,14 @@ use_gpu = st.checkbox("Usar GPU (se disponível)", value=torch.cuda.is_available
 uploaded_file = st.file_uploader("Faça upload do arquivo de áudio", type=["wav", "mp3", "m4a"])
 
 
-def load_audio_librosa(input_audio):
-    """Carrega qualquer formato de áudio compatível usando librosa."""
-    audio_data, sample_rate = librosa.load(input_audio, sr=16000, mono=True)  # Converte para mono e 16kHz
+def load_audio(input_audio):
+    """Carrega qualquer formato de áudio usando librosa (se disponível) ou torchaudio como fallback."""
+    if LIBROSA_AVAILABLE:
+        audio_data, sample_rate = librosa.load(input_audio, sr=16000, mono=True)
+    else:
+        audio_data, sample_rate = torchaudio.load(input_audio)
+        audio_data = audio_data.mean(dim=0).numpy()  # Converte para mono
+
     output_wav = Path("temp_audio.wav")
     sf.write(output_wav, audio_data, sample_rate)
     return output_wav
@@ -45,8 +57,8 @@ if uploaded_file is not None:
             with open(temp_audio_path, "wb") as f:
                 f.write(uploaded_file.read())
 
-            # ✅ Carregar o áudio sem conversão manual
-            temp_audio_path = load_audio_librosa(str(temp_audio_path))
+            # ✅ Carregar o áudio usando librosa ou torchaudio
+            temp_audio_path = load_audio(str(temp_audio_path))
 
             # ✅ Carregar o modelo Whisper
             device = "cuda" if use_gpu and torch.cuda.is_available() else "cpu"
