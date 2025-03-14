@@ -7,8 +7,8 @@ import soundfile as sf
 import numpy as np
 import datetime
 from pathlib import Path
-from pydub import AudioSegment  # 🔥 Alternativa ao ffmpeg
-import torchaudio  # 🔥 Alternativa para carregar áudios sem conversão
+from pydub import AudioSegment  # 🔥 Apenas para carregar MP3/M4A, sem conversão
+import torchaudio  # 🔥 Para WAV
 
 class Transcriber:
     def __init__(self, model_size="small", language="pt", use_gpu=True,
@@ -46,14 +46,14 @@ class Transcriber:
         if not audio_path.exists():
             raise FileNotFoundError(f"Arquivo de áudio não encontrado: {audio_path}")
 
-        # 🔥 Converter para WAV (caso seja MP3 ou M4A)
-        wav_path = self._convert_to_wav(audio_path)
+        # 🔥 Carregar o áudio no formato original
+        waveform, sample_rate = self._load_audio(audio_path)
 
-        self.log_step(f"Step 2/5: Verificando e dividindo áudio, se necessário - {wav_path.name}")
-        segments = self._split_audio(wav_path)
+        self.log_step(f"Step 2/5: Verificando e dividindo áudio, se necessário - {audio_path.name}")
+        segments = self._split_audio(waveform, sample_rate, audio_path)
 
         if not segments:
-            self.log_step(f"Nenhum segmento encontrado para transcrição - {wav_path}")
+            self.log_step(f"Nenhum segmento encontrado para transcrição - {audio_path}")
             return
 
         output_file = self.output_dir / f"{audio_path.stem}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
@@ -62,7 +62,7 @@ class Transcriber:
         accumulated_time = 0
 
         for idx, segment in enumerate(segments):
-            self.log_step(f"Step 3/5: Transcrevendo segmento {idx+1}/{len(segments)} - {segment.name}")
+            self.log_step(f"Step 3/5: Transcrevendo segmento {idx+1}/{len(segments)}")
             formatted_text, segment_duration = self._transcribe_segment(segment, accumulated_time)
             if formatted_text:
                 transcribed_text.append(formatted_text)
@@ -76,36 +76,38 @@ class Transcriber:
 
         self._cleanup_segments(segments)
 
-    def _convert_to_wav(self, audio_path):
-        """Converte MP3/M4A para WAV se necessário."""
-        if audio_path.suffix.lower() in [".wav"]:
-            return audio_path  # Já está no formato correto
+    def _load_audio(self, audio_path):
+        """Carrega áudio em WAV, MP3 ou M4A sem conversão."""
+        ext = audio_path.suffix.lower()
+        
+        if ext == ".wav":
+            waveform, sample_rate = torchaudio.load(audio_path)
+        else:
+            audio = AudioSegment.from_file(audio_path, format=ext[1:])  # Remove o "."
+            sample_rate = audio.frame_rate
+            samples = np.array(audio.get_array_of_samples()).astype(np.float32)
+            waveform = torch.tensor(samples).unsqueeze(0) / 32768.0  # Normaliza
 
-        output_wav = audio_path.with_suffix(".wav")
-        self.log_step(f"🔄 Convertendo {audio_path.suffix} → WAV: {output_wav}")
-        audio = AudioSegment.from_file(audio_path)
-        audio.export(output_wav, format="wav")
-        return output_wav
+        return waveform, sample_rate
 
-    def _split_audio(self, audio_path):
-        """Divide o áudio se for maior que `max_audio_length`."""
-        audio, sample_rate = sf.read(audio_path)
-        duration = len(audio) / sample_rate
+    def _split_audio(self, waveform, sample_rate, audio_path):
+        """Divide o áudio em segmentos se necessário."""
+        duration = waveform.shape[1] / sample_rate
         if duration <= self.max_audio_length:
-            return [audio_path]
+            return [audio_path]  # Retorna o próprio áudio se não precisar dividir
 
         segments = []
         num_segments = int(np.ceil(duration / self.max_audio_length))
         for i in range(num_segments):
             start_sample = int(i * self.max_audio_length * sample_rate)
-            end_sample = min(int((i+1) * self.max_audio_length * sample_rate), len(audio))
-            segment_audio = audio[start_sample:end_sample]
+            end_sample = min(int((i + 1) * self.max_audio_length * sample_rate), waveform.shape[1])
+            segment_audio = waveform[:, start_sample:end_sample]
 
-            if len(segment_audio) / sample_rate < self.min_duration:
+            if (end_sample - start_sample) / sample_rate < self.min_duration:
                 continue
 
             segment_path = audio_path.with_suffix(f".part{i}.wav")
-            sf.write(segment_path, segment_audio, sample_rate)
+            sf.write(segment_path, segment_audio.numpy().T, sample_rate)
             segments.append(segment_path)
 
         return segments
