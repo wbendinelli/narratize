@@ -1,32 +1,26 @@
-# 🔹 Streamlit e UI
+# Streamlit para interface web
 streamlit
-streamlit-authenticator
 
-# 🔹 Machine Learning & AI
+# Modelos de Machine Learning e Transcrição
 torch
 torchaudio
-transformers
-openai
 whisper
 
-# 🔹 Processamento de áudio
+# Processamento de Áudio
 librosa
 soundfile
 ffmpeg-python
 
-# 🔹 Diarização de falantes
+# NLP e Correção Gramatical
+language_tool_python
+
+# Processamento de Voz e Diarização de Locutores
 pyannote.audio
 
-# 🔹 Flask e Autenticação
-flask
-flask-login
-flask_sqlalchemy
-werkzeug
-
-# 🔹 Utilitários
+# Dependências Utilitárias
 numpy
-pandas
-requests
-python-dotenv
-language_tool_python
-huggingface_hub
+logging
+subprocess32
+pathlib
+datetime
+gc
