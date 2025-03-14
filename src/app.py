@@ -1,9 +1,9 @@
 import streamlit as st
 import torch
 import whisper
+import torchaudio
 import os
 from pathlib import Path
-from pydub import AudioSegment
 
 # ✅ Configuração inicial do Streamlit
 st.set_page_config(page_title="🎙️ Transcrição de Áudio", layout="centered")
@@ -25,10 +25,10 @@ use_gpu = st.checkbox("Usar GPU (se disponível)", value=torch.cuda.is_available
 uploaded_file = st.file_uploader("Faça upload do arquivo de áudio", type=["wav", "mp3", "m4a"])
 
 def convert_audio_to_wav(input_audio):
-    """Converte arquivos MP3 ou M4A para WAV usando pydub."""
-    audio = AudioSegment.from_file(input_audio)
+    """Converte arquivos de áudio para WAV usando torchaudio."""
+    waveform, sample_rate = torchaudio.load(input_audio)
     output_wav = input_audio.with_suffix(".wav")
-    audio.export(output_wav, format="wav")
+    torchaudio.save(output_wav, waveform, sample_rate)
     return output_wav
 
 if uploaded_file is not None:
