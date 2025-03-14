@@ -6,6 +6,7 @@ openai-whisper
 # Manipulação de Áudio
 soundfile
 numpy
+pydub
 
 # Utilitários
 pathlib
