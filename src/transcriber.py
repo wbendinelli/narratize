@@ -6,12 +6,11 @@ import whisper
 import numpy as np
 import datetime
 import torchaudio
-import audioread  # 🔥 Lê MP3/M4A sem necessidade de ffmpeg
 from pathlib import Path
 
 class Transcriber:
-    def __init__(self, model_size="small", language="pt", use_gpu=True,
-                 output_dir="transcriptions", max_audio_length=300, min_duration=2):
+    def __init__(self, model_size="small", language="pt", use_gpu=True, output_dir="transcriptions",
+                 max_audio_length=300, min_duration=2):
         self.model_size = model_size
         self.language = language
         self.use_gpu = use_gpu and torch.cuda.is_available()
@@ -45,7 +44,7 @@ class Transcriber:
         if not audio_path.exists():
             raise FileNotFoundError(f"Arquivo de áudio não encontrado: {audio_path}")
 
-        # 🔥 Carregar áudio sem conversão
+        # 🔥 Carregar áudio com `torchaudio`
         waveform, sample_rate = self._load_audio(audio_path)
 
         self.log_step(f"Step 2/5: Verificando e dividindo áudio, se necessário - {audio_path.name}")
@@ -68,18 +67,12 @@ class Transcriber:
         return "\n".join(transcribed_text)
 
     def _load_audio(self, audio_path):
-        """Carrega MP3, M4A e WAV sem conversão."""
+        """Carrega arquivos MP3, M4A e WAV sem conversão externa."""
         ext = audio_path.suffix.lower()
 
         try:
-            if ext == ".wav":
-                waveform, sample_rate = torchaudio.load(audio_path)
-            else:
-                with audioread.audio_open(str(audio_path)) as audio_file:
-                    sample_rate = audio_file.samplerate
-                    samples = np.concatenate([np.frombuffer(buf, dtype=np.int16) for buf in audio_file])
-                    waveform = torch.tensor(samples).float().unsqueeze(0) / 32768.0  # Normaliza para -1 a 1
-
+            torchaudio.set_audio_backend("sox_io")  # 🔥 Define backend para evitar `audioread`
+            waveform, sample_rate = torchaudio.load(audio_path)
             return waveform, sample_rate
         except Exception as e:
             raise RuntimeError(f"Erro ao carregar áudio ({audio_path}): {e}")
