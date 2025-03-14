@@ -3,8 +3,8 @@ import torch
 import whisper
 import torchaudio
 import os
-import audioread
 import numpy as np
+from pydub import AudioSegment
 from pathlib import Path
 
 # ✅ Configuração inicial do Streamlit
@@ -18,7 +18,7 @@ model_size = st.selectbox("Selecione o modelo Whisper:", ["tiny", "base", "small
 
 # 🔹 Escolha do idioma
 language = st.selectbox("Escolha o idioma:", ["Português", "Inglês", "Espanhol"])
-lang_code = {"Português": "pt", "Inglês": "en", "Espanhol": "es"}[language]  # ✅ Agora está correto
+lang_code = {"Português": "pt", "Inglês": "en", "Espanhol": "es"}[language]
 
 # 🔹 Opção de GPU (se disponível)
 use_gpu = st.checkbox("Usar GPU (se disponível)", value=torch.cuda.is_available())
@@ -27,17 +27,20 @@ use_gpu = st.checkbox("Usar GPU (se disponível)", value=torch.cuda.is_available
 uploaded_file = st.file_uploader("Faça upload do arquivo de áudio", type=["wav", "mp3", "m4a"])
 
 
-def load_audio(input_audio):
+def load_audio(input_audio, format):
     """
-    Carrega o áudio no formato original sem conversão.
-    Utiliza `torchaudio` e `audioread` para garantir compatibilidade com MP3, M4A e WAV.
-    Retorna o waveform e a taxa de amostragem.
+    Carrega o áudio de entrada sem conversão.
+    Utiliza torchaudio para WAV e pydub para MP3 e M4A.
+    Retorna o waveform (Tensor) e a taxa de amostragem.
     """
-    with audioread.audio_open(input_audio) as audio_file:
-        sample_rate = audio_file.samplerate
-        audio_data = np.concatenate([np.frombuffer(frame, dtype=np.int16) for frame in audio_file])
+    if format == "wav":
+        waveform, sample_rate = torchaudio.load(input_audio)
+    else:
+        audio = AudioSegment.from_file(input_audio, format=format)
+        sample_rate = audio.frame_rate
+        samples = np.array(audio.get_array_of_samples()).astype(np.float32)
+        waveform = torch.tensor(samples).unsqueeze(0) / 32768.0  # Normalizar
 
-    waveform = torch.tensor(audio_data, dtype=torch.float32).unsqueeze(0) / 32768.0  # Normalizar para float32
     return waveform, sample_rate
 
 
@@ -52,7 +55,8 @@ if uploaded_file is not None:
                 f.write(uploaded_file.read())
 
             # ✅ Carregar o áudio diretamente sem conversão
-            waveform, sample_rate = load_audio(str(temp_audio_path))
+            file_format = temp_audio_path.suffix[1:]  # Pega extensão sem o ponto
+            waveform, sample_rate = load_audio(str(temp_audio_path), file_format)
 
             # ✅ Carregar o modelo Whisper
             device = "cuda" if use_gpu and torch.cuda.is_available() else "cpu"
