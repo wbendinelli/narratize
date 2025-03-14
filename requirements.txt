@@ -12,4 +12,5 @@ werkzeug
 requests
 whisper
 ffmpeg-python
-uv
+soundfile
+librosa
