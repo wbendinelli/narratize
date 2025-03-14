@@ -1,17 +1,13 @@
-# Frameworks de Machine Learning e Processamento de Áudio
 torch
-torchaudio
 openai-whisper
-
-# Manipulação de Áudio
-soundfile
+ffmpeg-python
 numpy
+pandas
+soundfile
 pydub
-
-# Utilitários
+torchaudio
+streamlit
 pathlib
 datetime
 logging
-imageio[ffmpeg]
-ffmpeg-python
 librosa
