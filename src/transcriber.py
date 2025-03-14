@@ -3,11 +3,11 @@ import sys
 import logging
 import torch
 import whisper
-import soundfile as sf
 import numpy as np
 import datetime
+import torchaudio
+import audioread  # 🔥 Lê MP3/M4A sem necessidade de ffmpeg
 from pathlib import Path
-import torchaudio  # 🔥 Carregamento eficiente de áudio
 
 class Transcriber:
     def __init__(self, model_size="small", language="pt", use_gpu=True,
@@ -45,7 +45,7 @@ class Transcriber:
         if not audio_path.exists():
             raise FileNotFoundError(f"Arquivo de áudio não encontrado: {audio_path}")
 
-        # 🔥 Carregar o áudio sem conversão
+        # 🔥 Carregar áudio sem conversão
         waveform, sample_rate = self._load_audio(audio_path)
 
         self.log_step(f"Step 2/5: Verificando e dividindo áudio, se necessário - {audio_path.name}")
@@ -65,20 +65,20 @@ class Transcriber:
                 transcribed_text.append(formatted_text)
                 accumulated_time += segment_duration
 
-        final_text = "\n".join(transcribed_text)
-
-        return final_text
+        return "\n".join(transcribed_text)
 
     def _load_audio(self, audio_path):
         """Carrega MP3, M4A e WAV sem conversão."""
         ext = audio_path.suffix.lower()
-        
+
         try:
             if ext == ".wav":
                 waveform, sample_rate = torchaudio.load(audio_path)
             else:
-                waveform, sample_rate = sf.read(audio_path, always_2d=True)
-                waveform = torch.tensor(waveform).float().T  # Ajusta para PyTorch
+                with audioread.audio_open(str(audio_path)) as audio_file:
+                    sample_rate = audio_file.samplerate
+                    samples = np.concatenate([np.frombuffer(buf, dtype=np.int16) for buf in audio_file])
+                    waveform = torch.tensor(samples).float().unsqueeze(0) / 32768.0  # Normaliza para -1 a 1
 
             return waveform, sample_rate
         except Exception as e:
@@ -101,7 +101,7 @@ class Transcriber:
                 continue
 
             segment_path = audio_path.with_suffix(f".part{i}.wav")
-            sf.write(segment_path, segment_audio.numpy().T, sample_rate)
+            torchaudio.save(segment_path, segment_audio, sample_rate)
             segments.append(segment_path)
 
         return segments
