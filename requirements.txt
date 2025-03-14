@@ -1,16 +1,28 @@
+# 🔹 Streamlit e bibliotecas essenciais
 streamlit
-pandas
-numpy
+streamlit-authenticator
+
+# 🔹 Machine Learning & AI
 torch
 torchaudio
 transformers
 openai
+whisper
+
+# 🔹 Processamento de áudio
+librosa
+soundfile
+ffmpeg-python
+
+# 🔹 Flask e Autenticação
 flask
-flask_login
+flask-login
 flask_sqlalchemy
 werkzeug
+
+# 🔹 Utilitários
+numpy
+pandas
 requests
-whisper
-ffmpeg-python
-soundfile
-librosa
+python-dotenv
+language_tool_python
