@@ -1,8 +1,10 @@
 import streamlit as st
 import torch
 import whisper
-import torchaudio
+import soundfile as sf
+import numpy as np
 import os
+import audioread
 from pathlib import Path
 
 # ✅ Configuração inicial do Streamlit
@@ -24,12 +26,21 @@ use_gpu = st.checkbox("Usar GPU (se disponível)", value=torch.cuda.is_available
 # 🔹 Upload do arquivo de áudio
 uploaded_file = st.file_uploader("Faça upload do arquivo de áudio", type=["wav", "mp3", "m4a"])
 
+
 def convert_audio_to_wav(input_audio):
-    """Converte arquivos de áudio para WAV usando torchaudio."""
-    waveform, sample_rate = torchaudio.load(input_audio)
+    """Converte arquivos MP3 e M4A para WAV usando audioread e soundfile."""
     output_wav = input_audio.with_suffix(".wav")
-    torchaudio.save(output_wav, waveform, sample_rate)
+    
+    # Lê o áudio com audioread (suporte universal a vários formatos)
+    with audioread.audio_open(str(input_audio)) as reader:
+        sample_rate = reader.samplerate
+        channels = reader.channels
+        audio_data = np.concatenate([np.frombuffer(buf, dtype=np.int16) for buf in reader])
+
+    # Salva em formato WAV
+    sf.write(output_wav, audio_data, sample_rate)
     return output_wav
+
 
 if uploaded_file is not None:
     st.audio(uploaded_file, format="audio/mp3")
