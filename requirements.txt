@@ -11,3 +11,4 @@ pathlib
 datetime
 logging
 librosa
+openai
