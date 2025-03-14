@@ -71,7 +71,14 @@ class Transcriber:
         ext = audio_path.suffix.lower()
 
         try:
-            torchaudio.set_audio_backend("sox_io")  # 🔥 Define backend para evitar `audioread`
+            # 🔥 Verifica se `torchaudio` consegue ler o formato diretamente
+            info = torchaudio.info(str(audio_path))
+            waveform, sample_rate = torchaudio.load(audio_path)
+            return waveform, sample_rate
+        except RuntimeError:
+            # 🛑 Se não puder ser lido diretamente, usa FFmpeg para carregar
+            self.log_step(f"⚠️ Formato {ext} não suportado diretamente. Usando backend FFmpeg.")
+            torchaudio.set_audio_backend("sox_io")  # Garantindo uso correto do backend
             waveform, sample_rate = torchaudio.load(audio_path)
             return waveform, sample_rate
         except Exception as e:
