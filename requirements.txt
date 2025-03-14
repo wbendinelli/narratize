@@ -1,3 +1,6 @@
+librosa==0.10.1
+numba==0.57.0
+llvmlite==0.40.0
 torch
 openai-whisper
 ffmpeg-python
@@ -10,5 +13,4 @@ streamlit
 pathlib
 datetime
 logging
-librosa
 openai
