@@ -1,8 +1,13 @@
+import os
 import streamlit as st
 import torch
 import whisper
 from pathlib import Path
-import os
+
+# ✅ Instala o FFmpeg automaticamente se não estiver disponível
+if not os.system("ffmpeg -version") == 0:
+    st.warning("FFmpeg não encontrado! Instalando agora...")
+    os.system("apt-get install -y ffmpeg")
 
 # 🔹 Configuração inicial do Streamlit
 st.set_page_config(page_title="🎙️ Transcrição de Áudio", layout="centered")
@@ -40,18 +45,18 @@ if uploaded_file is not None:
             # ✅ Faz a transcrição
             result = model.transcribe(str(temp_audio_path), language=lang_code)
 
-            # ✅ Exibe a transcrição
+            # ✅ Exibe a transcrição na tela
             st.subheader("📜 Transcrição:")
             st.text_area("Resultado:", result["text"], height=300)
 
-            # 🔥 Opcional: Salvar a transcrição em um arquivo
+            # 🔥 Salvar a transcrição em um arquivo
             output_file = Path("transcription.txt")
             with open(output_file, "w", encoding="utf-8") as f:
                 f.write(result["text"])
 
             st.success("✅ Transcrição concluída e salva como 'transcription.txt'.")
 
-            # 🔥 Baixar o arquivo de transcrição
+            # 🔥 Botão para baixar o arquivo de transcrição
             with open(output_file, "rb") as f:
                 st.download_button("⬇️ Baixar Transcrição", f, file_name="transcription.txt", mime="text/plain")
 
