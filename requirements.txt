@@ -1,7 +1,7 @@
 # Frameworks de Machine Learning e Processamento de Áudio
 torch
 torchaudio
-whisper
+openai-whisper
 
 # Manipulação de Áudio
 soundfile
